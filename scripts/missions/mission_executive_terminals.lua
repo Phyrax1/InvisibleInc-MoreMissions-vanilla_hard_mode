@@ -37,9 +37,38 @@ local LOOT_TERMINAL =
 	end,
 }
 
+local function callnewGuardonObjective(script, sim)
+    local target = mission_util.findUnitByTag(sim, "newMapData")
+    if target then
+        local x, y = target:getLocation()
+        local wt = util.weighted_list(sim._patrolGuard)
+        local templateName = wt:getChoice(sim:nextRand(1, wt:getTotalWeight()))
+        local units = sim:getNPC():spawnGuards(sim, templateName, 1)
+        for i, unit in ipairs(units) do
+            if sim:getTrackerStage() < 5 then
+                sim:getNPC():getIdleSituation():generatePatrolPath(unit, x, y)
+                if unit:getTraits().patrolPath and #unit:getTraits().patrolPath > 1 then
+                    local firstPoint = unit:getTraits().patrolPath[1]
+                    sim:dispatchEvent(simdefs.EV_CAM_PAN, {x, y})
+                    unit:getBrain():getSenses():addInterest(
+                        firstPoint.x, firstPoint.y, simdefs.SENSE_HEARING, simdefs.REASON_PATROLCHANGED, target -- use SENSE_HEARING so the interest is visible, unlikely to cause problems I think
+                    )
+                end
+
+            else
+                sim:dispatchEvent(simdefs.EV_CAM_PAN, {x, y})
+                unit:getBrain():spawnInterest(x, y, simdefs.SENSE_RADIO, simdefs.REASON_REINFORCEMENTS, target)
+            end
+            sim:processReactions(unit)
+        end
+    end
+end
 
 local function doAftermath(script, sim)
-    
+    local diffOpts = sim:getParams().difficultyOptions
+    if diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
+        callnewGuardonObjective(script, sim)
+    end
     script:queue( 1*cdefs.SECONDS )
     script:queue( { script=SCRIPTS.INGAME.AFTERMATH.TERMS[sim:nextRand(1, #SCRIPTS.INGAME.AFTERMATH.TERMS)], type="newOperatorMessage" } )
     
