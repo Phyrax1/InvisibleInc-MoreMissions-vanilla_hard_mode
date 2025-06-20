@@ -67,7 +67,10 @@ end
 local function doAftermath(script, sim)
     local diffOpts = sim:getParams().difficultyOptions
     if diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
+	script:waitFrames(.5 * cdefs.SECONDS)
         callnewGuardonObjective(script, sim)
+        script:waitFrames(1.5 * cdefs.SECONDS)
+        sim:getNPC():addMainframeAbility(sim, "agent_sapper", nil, 0)
     end
     script:queue( 1*cdefs.SECONDS )
     script:queue( { script=SCRIPTS.INGAME.AFTERMATH.TERMS[sim:nextRand(1, #SCRIPTS.INGAME.AFTERMATH.TERMS)], type="newOperatorMessage" } )
