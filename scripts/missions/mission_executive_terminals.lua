@@ -37,7 +37,7 @@ local LOOT_TERMINAL =
 	end,
 }
 
-local function callnewGuardonObjective(script, sim)
+local function callNewGuardonObjective(script, sim)
     local target = mission_util.findUnitByTag(sim, "newMapData")
     if target then
         local x, y = target:getLocation()
@@ -67,9 +67,9 @@ end
 local function doAftermath(script, sim)
     local diffOpts = sim:getParams().difficultyOptions
     if diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
-	script:waitFrames(.5 * cdefs.SECONDS)
-        callnewGuardonObjective(script, sim)
-        script:waitFrames(1.5 * cdefs.SECONDS)
+        script:waitFrames(.25 * cdefs.SECONDS)
+        callNewGuardonObjective(script, sim)
+        script:waitFrames(1 * cdefs.SECONDS)
         sim:getNPC():addMainframeAbility(sim, "agent_sapper", nil, 0)
     end
     script:queue( 1*cdefs.SECONDS )
