@@ -114,7 +114,12 @@ local function init( modApi )
 	for i,log in ipairs(logs) do
 		modApi:addLog(log)
 	end
-	
+
+	-- vanilla hard mode (+ executive terminal in load)
+    	include(scriptPath .. "/missions/mission_server_farm")
+    	include(scriptPath .. "/missions/mission_ceo_office")
+    	include(scriptPath .. "/missions/mission_security")
+    	include(scriptPath .. "/missions/mission_cyberlab")
 end
 
 local function lateInit( modApi )
@@ -337,10 +342,6 @@ local function load( modApi, options, params )
 	include( scriptPath .. "/missions/mole_insertion" )
 	include( scriptPath .. "/missions/mission_util" ) --mainly support for AI Terminal dialogue from Interactive Events
 	include( scriptPath .. "/missions/mission_executive_terminals" ) --override mission choice window
-
-	-- vanilla hard mode
-   	include(scriptPath .. "/missions/mission_server_farm")
-    	include(scriptPath .. "/missions/mission_ceo_office")
 
 	local npc_abilities = include( scriptPath .. "/abilities/npc_abilities" )
 	for name, ability in pairs(npc_abilities) do
