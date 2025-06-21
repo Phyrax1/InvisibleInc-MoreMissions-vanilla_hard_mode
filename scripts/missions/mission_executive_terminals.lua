@@ -57,7 +57,7 @@ local function callnewGuardonObjective(script, sim)
 
             else
                 sim:dispatchEvent(simdefs.EV_CAM_PAN, {x, y})
-                unit:getBrain():spawnInterest(x, y, simdefs.SENSE_RADIO, simdefs.REASON_REINFORCEMENTS, target)
+                unit:getBrain():spawnInterest(x, y, simdefs.SENSE_RADIO, simdefs.REASON_SHARED, target)
             end
             sim:processReactions(unit)
         end
