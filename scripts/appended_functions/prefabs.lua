@@ -24,7 +24,8 @@ prefabs.generatePrefabs = function( cxt, candidates, tag, maxCount, fitnessFn, f
 		-- for i = (oldMaxCount - 1), 1, -1 do
 			-- generatePrefabs_old( cxt, candidates, tag, maxCount, fitnessFn, fitnessSelect, ... ) --needed so BOTH guard exits spawn far from mole prefab. Re-run function as many times as original maxCount
 		-- end
-		        -- used for cfo office so only one guard entry gets adjusted, does custom fitness for maxUpdatedPlacement times, then default to vanilla
+		
+		-- used for cfo office so only one guard entry gets adjusted. uses custom fitness maxUpdatedPlacement times, then defaults to vanilla
         	if cxt.maxUpdatedPlacement and cxt.maxUpdatedPlacement[tag] then
             		local limit = cxt.maxUpdatedPlacement[tag]
             		local placed = {}
