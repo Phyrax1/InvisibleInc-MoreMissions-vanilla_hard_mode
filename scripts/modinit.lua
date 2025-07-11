@@ -120,6 +120,9 @@ local function init( modApi )
     	include(scriptPath .. "/missions/mission_ceo_office")
     	include(scriptPath .. "/missions/mission_security")
     	include(scriptPath .. "/missions/mission_cyberlab")
+    	include(scriptPath .. "/missions/mission_detention_centre")
+    	include(scriptPath .. "/missions/mission_nanofab")
+    	include(scriptPath .. "/missions/mission_vault")
 end
 
 local function lateInit( modApi )
