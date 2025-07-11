@@ -1,3 +1,9 @@
+-- hard mode:
+-- 1 Guard elevator and the Enforcer spawn in the closest possible position to the CFO
+-- Enforcer has +1 Armor
+-- Removed fixed CFO KO duration
+-- TODO: permission from cyberboy to use a modified spawnGuards from AGP or find another way to make guard spawn close (else AGP enforcers will not spawn)
+--------------------------------------------------------------------------------------------
 local mission = include("sim/missions/mission_ceo_office")
 local simdefs = include("sim/simdefs")
 local simquery = include("sim/simquery")
@@ -8,6 +14,7 @@ local unitdefs = include("sim/unitdefs")
 local SCRIPTS = include('client/story_scripts')
 local mathutil = include("modules/mathutil")
 local util = include("modules/util")
+local mazegen = include("sim/mazegen")
 
 --------------------------------------------------------------------------------------------
 --[[ copied from mission_util, no longer needed if scan radius remains unchanged
@@ -131,6 +138,7 @@ end
 
 ---------------------------------------------------------------------------------------------
 -- copied AGP's aiplayer:spawnGuards override and modified it to accept a target argument which the guards spawn as close as possible to
+-- need to use some version of this or AGP enforcers will not spawn anymore, should be compatible with not having AGP installed
 
 local enforcers = {{{"npc_guard_enforcer_reinforcement", 100}, {"ce_inspector", 75, max_one = true},
                     {"ce_guard_enforcer_reinforcement_drone", 75}},
@@ -162,9 +170,20 @@ local function spawnCloseGuards(sim, unitType, numGuards, target)
         -- sort available cells by distance to target
         if target then
             local tx, ty = target:getLocation()
+            local startCel = sim:getCell(tx, ty)
+
+            for _, cell in ipairs(cells) do
+                local endCel = sim:getCell(cell.x, cell.y)
+                local _, cost = simquery.findPath(sim, nil, startCel, endCel)
+                if cost then
+                    cell.pathCost = cost
+                else
+                    cell.pathCost = mathutil.dist2d(tx, ty, cell.x, cell.y)
+                end
+            end
             table.sort(
                 cells, function(a, b)
-                    return mathutil.dist2d(a.x, a.y, tx, ty) < mathutil.dist2d(b.x, b.y, tx, ty)
+                    return a.pathCost < b.pathCost
                 end
             )
         end
@@ -332,14 +351,13 @@ local function callReinforcement(script, sim)
                 simdefs.EV_UNIT_ADD_FX, {unit = newUnit, kanim = "fx/firewall_buff_fx_2", symbol = "character",
                                          anim = "in", above = true, params = params}
             )
-            sim:getPC():glimpseUnit(sim, newUnit:getID()) -- armor is not shown on unit without this
+            sim:getPC():glimpseUnit(sim, newUnit:getID()) -- armor is not shown on unit without this, unit is already glimpsed by the spawn anyway
             --------------------------------------------------------------------------------------------
         end
         return true
     else
         return false
     end
-
 end
 
 local function brainScanBanter(script, sim)
@@ -366,13 +384,12 @@ local function brainScanBanter(script, sim)
     sim:incrementTimedObjective("guard_finish")
     script:waitFor(mission_util.PC_ANY)
     script:queue({type = "clearOperatorMessage"})
-    ---------------------------------------------------------------------------------------------
-    -- filler turn here
+    --[[---------------------------------------------------------------------------------------------
+    -- filler turn here (need to change objective counter as well)
     script:waitFor(mission_util.PC_START_TURN)
     sim:dispatchEvent(simdefs.EV_PLAY_SOUND, "SpySociety/Actions/transferData")
     sim:incrementTimedObjective("guard_finish")
-    script:waitFor(mission_util.PC_ANY)
-    ---------------------------------------------------------------------------------------------
+    --------------------------------------------------------------------------------------------- ]]
     script:waitFor(mission_util.PC_START_TURN)
     sim:dispatchEvent(simdefs.EV_PLAY_SOUND, "SpySociety/Actions/transferData")
     script:queue(0.5 * cdefs.SECONDS)
@@ -522,7 +539,7 @@ local function checkInterrogateTargets(script, sim, mission)
     end
     guard:getTraits().interrogationStarted = true
 
-    sim:addObjective(STRINGS.MISSIONS.ESCAPE.OBJ_BRAINSCAN, "guard_finish", 7) -- changed from 6 to 7
+    sim:addObjective(STRINGS.MISSIONS.ESCAPE.OBJ_BRAINSCAN, "guard_finish", 6) -- adjust when adding extra turns
     sim:addObjective(STRINGS.MISSIONS.ESCAPE.OBJ_STAYNEAR, "stay_near")
 
     sim:removeObjective("ko_target")
@@ -561,11 +578,43 @@ local function checkInterrogateTargets(script, sim, mission)
 
 end
 
+local function guardEntranceFitness(cxt, prefab, x, y)
+    local adjX, adjY = x + 1, y + 1 -- need to adjust for the prefab anchor of the guard entry being outside of it
+
+    local startRoom = cxt:roomContaining(adjX, adjY)
+    if not startRoom then
+        return 0
+    end
+
+    local minDepth = nil
+    mazegen.breadthFirstSearch(
+        cxt, startRoom, function(r)
+            if r.tags["ceo_office"] and minDepth == nil then
+                minDepth = r.depth
+            end
+        end
+    )
+
+    if not minDepth then
+        return 0
+    end
+
+    local fitness = 1 / (1 + minDepth)
+    log:write(
+        simdefs.LOG_PROCGEN, string.format(
+            "[MM] guardEntranceFitness (BFS): at (%d,%d) → minDepth=%d, fitness=%.3f", adjX, adjY, minDepth, fitness
+        )
+    )
+    return fitness
+end
+
+------------------------------------------------------------------------------------------------
+
 local oldmissioninit = mission.init
 function mission:init(scriptMgr, sim)
-    local rets = {oldmissioninit(self, scriptMgr, sim)}
+    oldmissioninit(self, scriptMgr, sim)
     local diffOpts = sim:getParams().difficultyOptions
-    if diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
+    if diffOpts and diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
         for _, hook in pairs(scriptMgr.hooks) do
             if hook.name == "CEO" then
                 scriptMgr:removeHook(hook)
@@ -574,58 +623,21 @@ function mission:init(scriptMgr, sim)
         end
         scriptMgr:addHook("CEO", checkInterrogateTargets, nil, self)
     end
-    return unpack(rets)
 end
 
-local escape_mission = include("sim/missions/escape_mission")
-
-local function minDistanceByTag(cxt, x, y, tag)
-    local best = math.huge
-    for _, c in ipairs(cxt.candidates) do
-        for _, t in ipairs(c.prefab.tags or {}) do
-            if t == tag then
-                local d = mathutil.dist2d(x, y, c.tx, c.ty)
-                best = math.min(best, d)
-            end
-        end
-    end
-    return best ~= math.huge and best or 0
-end
-
-local OFFSET = 10000 -- negative fitness gets discarded so just add an offset
-
-local function guardEntranceFitness(cxt, prefab, x, y)
-    local tileCount = cxt:calculatePrefabLinkage(prefab, x, y)
-    if tileCount == 0 then
-        return 0
-    end
-
-    local minDist = minDistanceByTag(cxt, x, y, "ceo_office")
---[[     log:write(
-        string.format(
-            "guardEntranceFitness: prefab=%s at (%d,%d) → minDist=%d", prefab.filename or "<unknown>", x, y, minDist
-        )
-    ) ]]
-    local fitness = tileCount - minDist ^ 2 + OFFSET
---[[     log:write(
-        string.format(
-            "guardEntranceFitness: prefab=%s at (%d,%d) → fitness=%d", prefab.filename or "<unknown>", x, y, fitness
-        )
-    ) ]]
-    return fitness
-end
-
+local oldgeneratePrefabs = mission.generatePrefabs
 function mission.generatePrefabs(cxt, candidates)
     local diffOpts = cxt.params.difficultyOptions
-    if diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
+    if diffOpts and diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
         local prefabs = include("sim/prefabs")
         cxt.defaultFitnessFn = cxt.defaultFitnessFn or {}
-        cxt.defaultFitnessSelect = cxt.defaultFitnessSelect or {}
-        cxt.maxCountOverride = cxt.maxCountOverride or {}
-        cxt.maxUpdatedPlacement = cxt.maxUpdatedPlacement or {}
         cxt.defaultFitnessFn["entry_guard"] = guardEntranceFitness
+        cxt.defaultFitnessSelect = cxt.defaultFitnessSelect or {}
         cxt.defaultFitnessSelect["entry_guard"] = prefabs.SELECT_HIGHEST
-        cxt.maxUpdatedPlacement["entry_guard"] = 1
+        cxt.checkAllPieces = cxt.checkAllPieces or {}
+        cxt.checkAllPieces["entry_guard"] = true
+        cxt.checkAllSpawnQuota = cxt.checkAllSpawnQuota or {}
+        cxt.checkAllSpawnQuota["entry_guard"] = 1
     end
-    escape_mission.generatePrefabs(cxt, candidates)
+    return oldgeneratePrefabs(cxt, candidates)
 end
