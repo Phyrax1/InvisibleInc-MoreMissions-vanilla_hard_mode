@@ -1,3 +1,5 @@
+-- hard mode: aftermath: install labyrinth and longer patrol paths
+-- TODO: hard mode currently only active if executive terminal option is on; with long AGP patrols enabled, this can give super long patrols. bug or feature?
 local array = include( "modules/array" )
 local util = include( "modules/util" )
 local cdefs = include( "client_defs" )
@@ -37,39 +39,10 @@ local LOOT_TERMINAL =
 	end,
 }
 
-local function callNewGuardonObjective(script, sim)
-    local target = mission_util.findUnitByTag(sim, "newMapData")
-    if target then
-        local x, y = target:getLocation()
-        local wt = util.weighted_list(sim._patrolGuard)
-        local templateName = wt:getChoice(sim:nextRand(1, wt:getTotalWeight()))
-        local units = sim:getNPC():spawnGuards(sim, templateName, 1)
-        for i, unit in ipairs(units) do
-            if sim:getTrackerStage() < 5 then
-                sim:getNPC():getIdleSituation():generatePatrolPath(unit, x, y)
-                if unit:getTraits().patrolPath and #unit:getTraits().patrolPath > 1 then
-                    local firstPoint = unit:getTraits().patrolPath[1]
-                    sim:dispatchEvent(simdefs.EV_CAM_PAN, {x, y})
-                    unit:getBrain():getSenses():addInterest(
-                        firstPoint.x, firstPoint.y, simdefs.SENSE_HEARING, simdefs.REASON_PATROLCHANGED, target -- use SENSE_HEARING so the interest is visible, unlikely to cause problems I think
-                    )
-                end
-
-            else
-                sim:dispatchEvent(simdefs.EV_CAM_PAN, {x, y})
-                unit:getBrain():spawnInterest(x, y, simdefs.SENSE_RADIO, simdefs.REASON_SHARED, target)
-            end
-            sim:processReactions(unit)
-        end
-    end
-end
-
 local function doAftermath(script, sim)
     local diffOpts = sim:getParams().difficultyOptions
     if diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
         script:waitFrames(.25 * cdefs.SECONDS)
-        callNewGuardonObjective(script, sim)
-        script:waitFrames(1 * cdefs.SECONDS)
         sim:getNPC():addMainframeAbility(sim, "agent_sapper", nil, 0)
     end
     script:queue( 1*cdefs.SECONDS )
@@ -79,13 +52,34 @@ local function doAftermath(script, sim)
     local idle = sim:getNPC():getIdleSituation()
     local guards = sim:getNPC():getUnits()
 
-
-    for i,guard in ipairs(guards) do
-       if guard:getBrain() and guard:getBrain():getSituation().ClassType == simdefs.SITUATION_IDLE then
-            idle:generatePatrolPath( guard )
-            if guard:getTraits().patrolPath and #guard:getTraits().patrolPath > 1 then
-                local firstPoint = guard:getTraits().patrolPath[1]
-                guard:getBrain():getSenses():addInterest(firstPoint.x, firstPoint.y, simdefs.SENSE_RADIO, simdefs.REASON_PATROLCHANGED, guard)
+    if diffOpts.MM_difficulty and diffOpts.MM_difficulty == "hard" then
+        for i, guard in ipairs(guards) do
+            if guard:getBrain() and guard:getBrain():getSituation().ClassType == simdefs.SITUATION_IDLE then
+                -- comment below is copied from vanilla, don't blame me
+                -- つ ◕_◕ ༽つ give patrol path つ ◕_◕ ༽つ
+                -- Hacky, but increase guard AP to make the path longer and then remove the extra AP. 
+                local oldMP = guard:getTraits().mpMax
+                guard:getTraits().mpMax = math.floor(guard:getTraits().mpMax * 1.9)
+                idle:generatePatrolPath(guard)
+                guard:getTraits().mpMax = oldMP
+                if guard:getTraits().patrolPath and #guard:getTraits().patrolPath > 1 then
+                    local firstPoint = guard:getTraits().patrolPath[1]
+                    guard:getBrain():getSenses():addInterest(
+                        firstPoint.x, firstPoint.y, simdefs.SENSE_RADIO, simdefs.REASON_PATROLCHANGED, guard
+                    )
+                end
+            end
+        end
+    else
+        for i, guard in ipairs(guards) do
+            if guard:getBrain() and guard:getBrain():getSituation().ClassType == simdefs.SITUATION_IDLE then
+                idle:generatePatrolPath(guard)
+                if guard:getTraits().patrolPath and #guard:getTraits().patrolPath > 1 then
+                    local firstPoint = guard:getTraits().patrolPath[1]
+                    guard:getBrain():getSenses():addInterest(
+                        firstPoint.x, firstPoint.y, simdefs.SENSE_RADIO, simdefs.REASON_PATROLCHANGED, guard
+                    )
+                end
             end
         end
     end
