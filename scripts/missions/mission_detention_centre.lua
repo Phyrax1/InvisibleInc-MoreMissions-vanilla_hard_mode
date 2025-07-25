@@ -100,6 +100,27 @@ local function removeStringCleanly(tagSet, strings)
     end
 end
 
+local function findTagPass(tagSet, target)
+    local function containsString(tbl, target)
+        if type(tbl) == "string" then
+            return tbl == target
+        elseif type(tbl) == "table" then
+            for _, v in pairs(tbl) do
+                if containsString(v, target) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    for i = 1, #tagSet do
+        if containsString(tagSet[i], target) then
+            return i
+        end
+    end
+    return nil
+end
+
 local function detentionFitness(cxt, prefab, x, y)
     local tileCount = cxt:calculatePrefabLinkage(prefab, x, y)
     if tileCount == 0 then
@@ -149,8 +170,14 @@ function mission.pregeneratePrefabs(cxt, tagSet)
         -- re-order so it's always entry -> detention -> exit
         local detention = removeStringCleanly(tagSet, {"detention"})
         local exit = removeStringCleanly(tagSet, {"exit", "exit_vault"})
-        table.insert(tagSet, 2, {{detention, detentionFitness}, fitnessSelect = prefabs.SELECT_HIGHEST})
-        table.insert(tagSet, 3, {{exit, exitFitness}, fitnessSelect = prefabs.SELECT_HIGHEST})
+        local entryPass = findTagPass(tagSet, "entry")
+        if entryPass then
+            table.insert(tagSet, entryPass + 1, {{detention, detentionFitness}, fitnessSelect = prefabs.SELECT_HIGHEST})
+            table.insert(tagSet, entryPass + 2, {{exit, exitFitness}, fitnessSelect = prefabs.SELECT_HIGHEST})
+        else
+            table.insert(tagSet, {{detention, detentionFitness}, fitnessSelect = prefabs.SELECT_HIGHEST})
+            table.insert(tagSet, {{exit, exitFitness}, fitnessSelect = prefabs.SELECT_HIGHEST})
+        end
         cxt.checkAllPieces = cxt.checkAllPieces or {}
         -- avoid setting this for rooms, increases consistency at the cost of prefab variety
         -- cxt.checkAllPieces["detention"] = true
