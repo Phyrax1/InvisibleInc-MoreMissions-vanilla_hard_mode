@@ -1,4 +1,4 @@
--- hard mode: captain has improved heart monitor and locates the escapee every turn
+-- hard mode: captain has improved heart monitor, notices when the doors open and locates the escapee every turn
 local mission = include("sim/missions/mission_detention_centre")
 local simdefs = include("sim/simdefs")
 local mission_util = include("sim/missions/mission_util")
