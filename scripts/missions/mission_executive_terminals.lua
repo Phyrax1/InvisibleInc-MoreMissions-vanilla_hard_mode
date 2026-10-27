@@ -1,5 +1,4 @@
 -- hard mode: aftermath: install labyrinth and longer patrol paths
--- kind of underwhelming with AGP long patrols enabled, but I think that's fine
 local array = include("modules/array")
 local util = include("modules/util")
 local simdefs = include("sim/simdefs")
